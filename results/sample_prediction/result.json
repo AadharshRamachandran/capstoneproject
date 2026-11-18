@@ -1,0 +1,18 @@
+{
+  "pid": "Lung_Dx-A0001",
+  "T_stage": "T3",
+  "probabilities": {
+    "T1": 0.138,
+    "T2": 0.121,
+    "T3": 0.557,
+    "T4": 0.184
+  },
+  "conformal_set_90pct": "T3|T4",
+  "confidence": 0.557,
+  "tumour_size_mm": 73.6,
+  "how": "ML (ensemble(image_catboost+ordinal_lr+ordinal_xgb)), size=7.4 cm",
+  "anatomy": "Anatomy: near lung boundary, great vessels",
+  "no_tumour_evidence": false,
+  "recorded_T_stage": "T2",
+  "heldout_crossvalidated_T": "T3"
+}

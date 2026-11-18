@@ -1,35 +1,31 @@
-# requirements.txt (REVISED)
-# Install: pip install -r requirements.txt --break-system-packages
-
-# Core
+# Core (as before)
+torch
 torchvision>=0.15.0
-
-# Model zoo
 segmentation-models-pytorch>=0.3.3
-timm>=0.9.0                        # All SOTA classifiers (ViT, ConvNeXt, EfficientNetV2 etc.)
-
-# TotalSegmentator (replaces LungNet/MediNet/LobeNet)
+timm>=0.9.0
 TotalSegmentator>=2.0.0
 SimpleITK>=2.3.0
-nibabel>=5.0.0                     # NIfTI I/O — must match TotalSegmentator's nibabel version
-
-# Medical imaging
+nibabel>=5.0.0
 pydicom>=2.4.0
-
-# Image processing
 opencv-python-headless>=4.8.0
 albumentations>=1.3.0
-
-# Scientific computing
 numpy>=1.24.0
 scipy>=1.11.0
 pandas>=2.0.0
 scikit-learn>=1.3.0
-
-# Visualisation
+xgboost
+lightgbm>=4.0                  # optional candidate in the tabular model zoo
+catboost>=1.2                 # shallow boosted-tree candidate for CT-only image fusion
 matplotlib>=3.7.0
 seaborn>=0.12.0
-
-# Utilities
 tqdm>=4.65.0
 Pillow>=10.0.0
+psutil
+scikit-image
+# New
+openpyxl                      # reading the TCIA clinical XLSX (improve_experiments.py)
+
+# Optional (only for the new experiments)
+# tabpfn                      # --tabpfn : tabular foundation model (weights download on first use; check its license terms)
+# foundation-cancer-image-biomarker --pre   # extract_fmcib_features.py (FMCIB lesion embeddings)
+# MedSAM2: git clone https://github.com/bowang-lab/MedSAM2 ; cd MedSAM2 ; pip install -e ".[dev]" ; bash download.sh   # box_medsam2_sizes.py

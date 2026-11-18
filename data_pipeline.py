@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 import pandas as pd
 import torch
+from dicom_utils import select_series
 from torch.utils.data import Dataset, DataLoader
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
@@ -27,6 +28,20 @@ CLAHE_GRID = (16, 16)
 NUM_WORKERS = 0
 PIN_MEMORY = True
 _TOTALSEG_SUPPRESS_NOTICE_SHOWN = False
+_TOTALSEG_TB_SHOWN = False
+_KEEP_STRUCT_PREFIXES = ("lung", "vertebrae", "heart", "aorta", "trachea", "esophagus", "pulmonary")
+
+_GROUP_STRUCTS = {"rib_": "rib_all", "sternum": "sternum", "costal_cartilages": "sternum",
+                  "superior_vena_cava": "superior_vena_cava", "inferior_vena_cava": "inferior_vena_cava",
+                  "brachiocephalic": "brachiocephalic_all", "subclavian": "brachiocephalic_all"}
+
+def _report_totalseg_error(prefix, e):
+    global _TOTALSEG_TB_SHOWN
+    print(f"  {prefix}: {e!r}")
+    if not _TOTALSEG_TB_SHOWN:
+        import traceback
+        traceback.print_exc()
+        _TOTALSEG_TB_SHOWN = True
 
 def load_dicom_series(series_dir: Union[str, Path]) -> Tuple[np.ndarray, dict]:
     import pydicom
@@ -52,6 +67,7 @@ def load_dicom_series(series_dir: Union[str, Path]) -> Tuple[np.ndarray, dict]:
     target_h: Optional[int] = None
     target_w: Optional[int] = None
     volume: List[np.ndarray] = []
+    sop_uids: List[str] = []
 
     def _to_2d_frames(arr: np.ndarray) -> List[np.ndarray]:
         arr = np.asarray(arr)
@@ -81,10 +97,12 @@ def load_dicom_series(series_dir: Union[str, Path]) -> Tuple[np.ndarray, dict]:
                 frame = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
             hu = frame * slope + intercept
             volume.append(hu)
+            sop_uids.append(str(getattr(s, "SOPInstanceUID", "")))
 
     if not volume:
         raise ValueError(f"No valid 2D DICOM slices found in {series_dir}")
 
+    meta["sop_uids"] = sop_uids
     return np.stack(volume, 0), meta
 
 def apply_lung_window(vol: np.ndarray) -> np.ndarray:
@@ -122,15 +140,6 @@ def preprocess_volume(vol_hu: np.ndarray) -> np.ndarray:
     return apply_clahe_volume(apply_lung_window(vol_hu))
 
 def dicom_series_to_nifti(series_dir: Union[str, Path], out_path: Union[str, Path]) -> bool:
-    """
-    Convert a DICOM series to a nibabel-safe 3D NIfTI file.
-
-    We deliberately write via nibabel (not SimpleITK.WriteImage) because
-    SimpleITK can produce NIfTI files that SimpleITK itself reads as 3D but
-    nibabel — which TotalSegmentator's nnUNet backend uses — reads as 4D,
-    causing the 'only 3d images are supported by NibabelIO' assertion.
-    Writing through nibabel guarantees the header is always strictly 3D.
-    """
     import pydicom
     series_dir = Path(series_dir)
     out_path   = Path(out_path)
@@ -271,11 +280,11 @@ def run_totalsegmentator(nii_path: Union[str, Path], output_dir: Union[str, Path
                     totalsegmentator(str(nii_path), str(output_dir))
 
         return {f.stem.replace(".nii", ""): f for f in output_dir.glob("*.nii.gz")}
-    except ImportError:
-        print("  TotalSegmentator not installed.")
+    except ImportError as e:
+        _report_totalseg_error("TotalSegmentator import failed", e)
         return {}
     except Exception as e:
-        print(f"  TotalSegmentator failed: {e}")
+        _report_totalseg_error("TotalSegmentator failed", e)
         return {}
 
 def load_nifti_as_numpy(nii_path: Union[str, Path]) -> np.ndarray:
@@ -479,25 +488,15 @@ def preprocess_patient_full(row: pd.Series, output_base: str, fast_totalseg: boo
             result["status"] = f"error: dicom_root not found: {dicom_path}"
             return result
 
-        ct_series = None
-        for study in dicom_path.iterdir():
-            if not study.is_dir():
-                continue
-            for series in study.iterdir():
-                if series.is_dir() and list(series.glob("*.dcm")):
-                    ct_series = series
-                    break
-            if ct_series:
-                break
-
-        if ct_series is None:
-            for sub in dicom_path.rglob("*.dcm"):
-                ct_series = sub.parent
-                break
-
+        ann_paths = [p for p in str(row.get("xml_working", "")).split("|") if p]
+        xml_uids = {Path(p).stem for p in ann_paths}
+        ct_series, _sinfo, _how = select_series(dicom_path, xml_uids)
         if ct_series is None:
             result["status"] = "error: no_ct_series"
             return result
+        print(f"  series chosen for {pid}: {_how} | modality={_sinfo['modality']} | {_sinfo['n']} slices | {_sinfo['desc'][:40]}")
+        result["series_choice"] = _how
+        result["series_modality"] = _sinfo["modality"]
 
         vol_hu, meta = load_dicom_series(ct_series)
         vol_pre = preprocess_volume(vol_hu)
@@ -556,24 +555,44 @@ def preprocess_patient_full(row: pd.Series, output_base: str, fast_totalseg: boo
 
         mask_dir = output_base/"anatomy_masks"
         mask_dir.mkdir(parents=True, exist_ok=True)
+        grouped = {}
         for nii_f in seg_dir.glob("*.nii.gz"):
             struct_name = nii_f.stem.replace(".nii","")
+            gname = next((g for pre, g in _GROUP_STRUCTS.items() if struct_name.startswith(pre)), None)
+            if gname is not None:
+                m = load_nifti_as_numpy(nii_f) > 0
+                grouped[gname] = m if gname not in grouped else (grouped[gname] | m)
+                continue
+            if not struct_name.startswith(_KEEP_STRUCT_PREFIXES):
+                continue
             np.save(str(mask_dir/f"{pid}_{struct_name}.npy"), load_nifti_as_numpy(nii_f))
+        for gname, m in grouped.items():
+            np.save(str(mask_dir/f"{pid}_{gname}.npy"), m.astype(np.uint8))
         result["anatomy_masks_dir"] = str(mask_dir)
 
-        ann_paths = str(row.get("xml_working","")).split("|")
         tumor_masks = np.zeros(vol_pre.shape, dtype=np.uint8)
+        uid_to_idx = {u: i for i, u in enumerate(meta.get("sop_uids", []))}
+        n_xml = n_match = 0
         for xml_path in ann_paths:
-            if not xml_path or not Path(xml_path).exists():
+            if not Path(xml_path).exists():
                 continue
             boxes = parse_annotation_xml(xml_path)
             if not boxes:
                 continue
-            nums = re.findall(r"\d+", Path(xml_path).stem)
-            if nums:
-                s_idx = int(nums[-1])-1
-                if 0<=s_idx<vol_pre.shape[0]:
-                    tumor_masks[s_idx] = annotation_to_mask(boxes, vol_pre.shape[1], vol_pre.shape[2])
+            n_xml += 1
+            uid = Path(xml_path).stem
+            s_idx = uid_to_idx.get(uid)
+            if s_idx is None:
+                nums = re.findall(r"\d+", uid)
+                if nums and len(nums[-1]) <= 4:
+                    s_idx = int(nums[-1]) - 1
+            if s_idx is not None and 0 <= s_idx < vol_pre.shape[0]:
+                tumor_masks[s_idx] = np.maximum(tumor_masks[s_idx], annotation_to_mask(boxes, vol_pre.shape[1], vol_pre.shape[2]))
+                n_match += 1
+        result["n_xml"], result["n_xml_matched"] = n_xml, n_match
+        print(f"  XML boxes matched to slices: {n_match}/{n_xml}")
+        if n_xml and n_match < n_xml:
+            print(f"  WARNING: {n_xml - n_match} annotated slice(s) of {pid} could not be matched")
 
         tumor_dir = output_base/"tumor_masks"
         tumor_dir.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,158 @@
+TIP: pip install tabpfn  -> adds TabPFN v2 (Nature 2025 small-data foundation model) to the candidate set (weights download on first use; set TNM_USE_TABPFN=0 to disable)
+Loaded shard000: 105 patients, 161 columns
+Loaded shard001: 63 patients, 161 columns
+Loaded shard002: 21 patients, 161 columns
+Loaded shard003: 22 patients, 161 columns
+Loaded shard004: 24 patients, 161 columns
+Loaded shard005: 48 patients, 161 columns
+Loaded shard006: 54 patients, 161 columns
+Loaded shard007: 18 patients, 161 columns
+
+Total patients: 355 (from 355 rows)
+CT FMCIB embeddings: 343/355 patients matched; 4096 image features
+Box-segmentation sizes: 331/355 patients with seg_*_size_mm > 0
+Solid-component sizes: 343/355 patients with solid_open_mm > 0
+Patients with a usable T_stage label: 351/355
+Label distribution: {'T1': 167, 'T2': 105, 'T3': 57, 'T4': 22}
+
+==============================================================================
+  EXTRACTION QA (per shard)
+==============================================================================
+  source   n  no_tumor(%)  median_size_mm  in_lung_frac(med)                   align  lung_NaN(%)  mediastinum_NaN(%)  vertebrae_NaN(%)  heart_NaN(%)  aorta_NaN(%)  trachea_NaN(%)  esophagus_NaN(%)
+shard000 105          0.0            47.2               0.61 identity:99,transpose:6          0.0                 0.0               4.8          22.9          14.3             0.0               2.9
+shard001  63          0.0            53.4               0.76 identity:61,transpose:2          1.6                 1.6               1.6          15.9           6.3             1.6               1.6
+shard002  21          0.0            45.8               0.72 identity:19,transpose:2          0.0                 0.0               4.8           0.0           4.8             4.8               4.8
+shard003  22          0.0            41.7               0.90             identity:22          0.0                 0.0               4.5           4.5           4.5             0.0               9.1
+shard004  24          0.0            38.0               0.98 identity:23,transpose:1          0.0                 0.0               0.0           0.0           0.0             0.0               0.0
+shard005  48          0.0            67.0               0.52 identity:45,transpose:3          0.0                 0.0               2.1          14.6           6.2             2.1               6.2
+shard006  54          0.0            75.4               0.19 identity:51,transpose:3          0.0                 0.0               5.6          31.5          16.7             1.9              11.1
+shard007  18          0.0            59.1               0.37 identity:17,transpose:1          0.0                 0.0              16.7          16.7          16.7            16.7              11.1
+
+  NOTE: 155 patient(s) have <50% of the tumor inside the lung mask. This is EXPECTED for bulky / central / solid masses (the lung mask excludes tumour tissue) and is NOT by itself evidence of misalignment; check only if small peripheral nodules appear here. Original wording: tumor/anatomy are probably misaligned or the box is wrong. First pids: ['Lung_Dx-A0002', 'Lung_Dx-A0006', 'Lung_Dx-A0011', 'Lung_Dx-A0013', 'Lung_Dx-A0014', 'Lung_Dx-A0015', 'Lung_Dx-A0016', 'Lung_Dx-A0019']
+
+  Tumor masks from XML boxes: 352/355 (box masks are converted to inscribed ellipses)
+
+  T distribution per shard (shard is NOT a model input):
+T_true    T1  T2  T3  T4
+source                  
+shard000  52  37  12   3
+shard001  37  17   5   2
+shard002   9   9   2   1
+shard003  15   3   2   2
+shard004  16   3   5   0
+shard005  17  15  12   3
+shard006  13  15  16  10
+shard007   8   6   3   1
+
+  T distribution per pid letter (in Lung-PET-CT-Dx the letter is the histology group - check the dataset docs):
+T_true   T1  T2  T3  T4
+letter                 
+A       137  73  29   8
+B        10  13  11   4
+E         1   0   1   3
+G        19  19  16   7
+
+==============================================================================
+  REPEATED CROSS-VALIDATION (model selection happens inside each training fold)
+==============================================================================
+  repeat 1/3 done
+  repeat 2/3 done
+  repeat 3/3 done
+
+  IASLC override policy (0.5*QWK + 0.5*macro-F1, mean over repeats): none=0.616, size=0.509, full=0.409  ->  using 'none'
+
+  ALL labelled patients (n=351)
+                                                 acc        macro_f1         bal_acc             qwk         within1         auc_T34
+  MODEL (cross-validated)                0.623±0.01     0.557±0.01     0.573±0.01     0.676±0.01     0.945±0.00     0.884±0.01
+    variant: override=none               0.623±0.01     0.557±0.01     0.573±0.01     0.676±0.01     0.945±0.00     0.884±0.01
+    variant: override=size               0.535±0.01     0.407±0.01     0.527±0.00     0.611±0.01     0.872±0.00     0.884±0.01
+    variant: override=full               0.472±0.01     0.370±0.01     0.497±0.01     0.448±0.00     0.757±0.00     0.884±0.01
+  baseline: always T1                    0.476±0.00     0.161±0.00     0.250±0.00     0.000±0.00     0.775±0.00             n/a
+  baseline: learned 3 size cut-offs      0.572±0.01     0.507±0.01     0.530±0.02     0.638±0.00     0.931±0.00     0.887±0.00
+  baseline: IASLC size rule              0.236±0.00     0.236±0.00     0.372±0.00     0.418±0.00     0.781±0.00     0.887±0.00
+
+  patients WITH an extracted tumor (n=351)
+                                                 acc        macro_f1         bal_acc             qwk         within1         auc_T34
+  MODEL (cross-validated)                0.623±0.01     0.557±0.01     0.573±0.01     0.676±0.01     0.945±0.00     0.884±0.01
+    variant: override=none               0.623±0.01     0.557±0.01     0.573±0.01     0.676±0.01     0.945±0.00     0.884±0.01
+    variant: override=size               0.535±0.01     0.407±0.01     0.527±0.00     0.611±0.01     0.872±0.00     0.884±0.01
+    variant: override=full               0.472±0.01     0.370±0.01     0.497±0.01     0.448±0.00     0.757±0.00     0.884±0.01
+  baseline: always T1                    0.476±0.00     0.161±0.00     0.250±0.00     0.000±0.00     0.775±0.00             n/a
+  baseline: learned 3 size cut-offs      0.572±0.01     0.507±0.01     0.530±0.02     0.638±0.00     0.931±0.00     0.887±0.00
+  baseline: IASLC size rule              0.236±0.00     0.236±0.00     0.372±0.00     0.418±0.00     0.781±0.00     0.887±0.00
+
+  Conformal prediction sets (target coverage 90%): observed coverage 89.5%, mean set size 2.49 stages
+
+  Mean predicted confidence 0.46 vs accuracy 0.62  (a big gap = overconfident model)
+
+==============================================================================
+  FINAL MODEL (all labelled patients)
+==============================================================================
+  Suspect labels: 20 look inconsistent with their CT features (>=2 stages off, confident OOF) (reported only): ['Lung_Dx-A0202', 'Lung_Dx-G0014', 'Lung_Dx-G0016', 'Lung_Dx-A0057', 'Lung_Dx-B0003', 'Lung_Dx-G0024', 'Lung_Dx-B0001', 'Lung_Dx-G0028']
+  Model trained: ensemble(ordinal_xgb+image_catboost+ordinal_lr) | n=351 | features=4195 (image) | inner-CV score (0.5 QWK + 0.5 macro-F1)=0.658 | T=1.13 | decode=cutpoints
+  Members: [{'kind': 'ordinal_xgb', 'n_estimators': 150, 'max_depth': 2}, {'kind': 'image_catboost', 'iterations': 300, 'depth': 4, 'n_components': 16, 'bag': 3}, {'kind': 'ordinal_lr', 'C': 0.1, 'size_only': True}]
+  Saved: C:\Users\HP\Downloads\working\ablation_v5log2\add__box___TumorNet\checkpoints\t_stage_model.pkl
+  20 suspect labels written to C:\Users\HP\Downloads\working\ablation_v5log2\add__box___TumorNet\label_issues.csv (look at these CTs with inspect_boxes.py)
+
+  Predicted T distribution (all 355): {'T1': 148, 'T2': 95, 'T3': 93, 'T4': 19}
+  Saved: C:\Users\HP\Downloads\working\ablation_v5log2\add__box___TumorNet\final_t_staging_predictions.csv
+
+  T-Stage - CROSS-VALIDATED, modal over repeats (report this) (n=351)
+  ------------------------------------------------------------
+  Overall Accuracy : 62.96%
+  Macro F1         : 56.49%
+  Macro Precision  : 56.10%
+  Macro Recall     : 58.23%
+
+  Stage     Precision     Recall   F1 Score
+  ------------------------------------------
+  T1           80.13%     72.46%     76.10%
+  T2           53.19%     47.62%     50.25%
+  T3           48.24%     71.93%     57.75%
+  T4           42.86%     40.91%     41.86%
+  ------------------------------------------------------------
+              precision    recall  f1-score   support
+
+          T1       0.80      0.72      0.76       167
+          T2       0.53      0.48      0.50       105
+          T3       0.48      0.72      0.58        57
+          T4       0.43      0.41      0.42        22
+
+    accuracy                           0.63       351
+   macro avg       0.56      0.58      0.56       351
+weighted avg       0.65      0.63      0.63       351
+
+  Saved: C:\Users\HP\Downloads\working\ablation_v5log2\add__box___TumorNet\cm_T_crossval.png
+
+  T-Stage - TRAINING DATA (optimistic, do not report) (n=351)
+  ------------------------------------------------------------
+  Overall Accuracy : 71.23%
+  Macro F1         : 69.93%
+  Macro Precision  : 70.57%
+  Macro Recall     : 71.68%
+
+  Stage     Precision     Recall   F1 Score
+  ------------------------------------------
+  T1           86.90%     75.45%     80.77%
+  T2           63.16%     57.14%     60.00%
+  T3           53.26%     85.96%     65.77%
+  T4           78.95%     68.18%     73.17%
+  ------------------------------------------------------------
+              precision    recall  f1-score   support
+
+          T1       0.87      0.75      0.81       167
+          T2       0.63      0.57      0.60       105
+          T3       0.53      0.86      0.66        57
+          T4       0.79      0.68      0.73        22
+
+    accuracy                           0.71       351
+   macro avg       0.71      0.72      0.70       351
+weighted avg       0.74      0.71      0.72       351
+
+  Saved: C:\Users\HP\Downloads\working\ablation_v5log2\add__box___TumorNet\cm_T_train.png
+
+  Final model: ensemble(ordinal_xgb+image_catboost+ordinal_lr) {'members': [{'kind': 'ordinal_xgb', 'n_estimators': 150, 'max_depth': 2}, {'kind': 'image_catboost', 'iterations': 300, 'depth': 4, 'n_components': 16, 'bag': 3}, {'kind': 'ordinal_lr', 'C': 0.1, 'size_only': True}]} | inner-CV score 0.6576571221252498
+  Model file: C:\Users\HP\Downloads\working\ablation_v5log2\add__box___TumorNet\checkpoints\t_stage_model.pkl
+  Outputs in: C:\Users\HP\Downloads\working\ablation_v5log2\add__box___TumorNet
+
+  NOTE: N and M are not estimated (defaults N0/M0): 'overall_stage' is a T-only convenience value.

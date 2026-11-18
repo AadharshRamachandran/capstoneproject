@@ -72,20 +72,20 @@ def print_metrics_table(metrics: Dict, title: str):
     per_rec  = metrics.get("per_class_rec",  [])
 
     print(f"\n  {title}")
-    print("  " + "─" * 60)
+    print("  " + "-" * 60)
     print(f"  Overall Accuracy : {metrics['accuracy']*100:.2f}%")
     print(f"  Macro F1         : {metrics['macro_f1']*100:.2f}%")
     print(f"  Macro Precision  : {metrics['macro_precision']*100:.2f}%")
     print(f"  Macro Recall     : {metrics['macro_recall']*100:.2f}%")
     print()
     print(f"  {'Stage':<8} {'Precision':>10} {'Recall':>10} {'F1 Score':>10}")
-    print("  " + "─" * 42)
+    print("  " + "-" * 42)
     for i, lbl in enumerate(labels):
         p = per_prec[i] * 100 if i < len(per_prec) else 0.0
         r = per_rec[i]  * 100 if i < len(per_rec)  else 0.0
         f = per_f1[i]   * 100 if i < len(per_f1)   else 0.0
         print(f"  {lbl:<8} {p:>9.2f}% {r:>9.2f}% {f:>9.2f}%")
-    print("  " + "─" * 60)
+    print("  " + "-" * 60)
 
 def plot_confusion_matrix(y_true: List, y_pred: List, labels: List,
                            title: str, out_path: str):
@@ -169,9 +169,6 @@ def evaluate_segmentation(seg_metrics_2d: Dict, seg_metrics_3d: Dict,
 def evaluate_pathway_a(staging_results: pd.DataFrame,
                         ground_truth: pd.DataFrame,
                         out_dir: Path) -> Dict:
-    """
-    Evaluate Pathway A T-stage predictions against ground-truth labels.
-    """
     if staging_results is None or staging_results.empty:
         print("  No Pathway A results to evaluate.")
         return {}
@@ -265,7 +262,6 @@ def evaluate_pathway_b(image_results: Dict,
 def compare_pathways(pathway_a_t_metrics: Dict,
                      pathway_b_metrics: Dict,
                      out_dir: Path):
-    """Bar chart + CSV comparing Pathway A T-stage against Pathway B classifiers."""
     rows = []
     if pathway_a_t_metrics and "accuracy" in pathway_a_t_metrics:
         rows.append({
